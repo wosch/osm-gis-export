@@ -112,7 +112,8 @@ void print_help() {
               << "\nOptions:\n" \
               << "  -h, --help           This help message\n" \
               << "  -d, --debug          Enable debug output\n" \
-              << "  -f, --format=FORMAT  Output OGR format (Default: 'SQLite')\n";
+              << "  -f, --format=FORMAT  Output OGR format (Default: 'SQLite')\n" \
+              << "  -q, --quiet          No progress output\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -120,14 +121,16 @@ int main(int argc, char* argv[]) {
         {"help",   no_argument, 0, 'h'},
         {"debug",  no_argument, 0, 'd'},
         {"format", required_argument, 0, 'f'},
+        {"quiet",  no_argument, 0, 'q'},
         {0, 0, 0, 0}
     };
 
     std::string output_format{"SQLite"};
     bool debug = false;
+    bool quiet = false;
 
     while (true) {
-        int c = getopt_long(argc, argv, "hdf:", long_options, 0);
+        int c = getopt_long(argc, argv, "hdf:q", long_options, 0);
         if (c == -1) {
             break;
         }
@@ -141,6 +144,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'f':
                 output_format = optarg;
+                break;
+            case 'q':
+                quiet = true;
                 break;
             default:
                 std::exit(1);
@@ -170,9 +176,13 @@ int main(int argc, char* argv[]) {
     }
     osmium::area::MultipolygonManager<osmium::area::Assembler> mp_manager{assembler_config};
 
-    std::cerr << "Pass 1...\n";
+    if (!quiet) {
+    	std::cerr << "Pass 1...\n";
+    }
     osmium::relations::read_relations(input_file, mp_manager);
-    std::cerr << "Pass 1 done\n";
+    if (!quiet) {
+    	std::cerr << "Pass 1 done\n";
+    }
 
     index_type index;
     location_handler_type location_handler{index};
@@ -196,7 +206,9 @@ int main(int argc, char* argv[]) {
     gdalcpp::Dataset dataset{output_format, output_filename, gdalcpp::SRS{factory.proj_string()}, { "SPATIALITE=TRUE", "INIT_WITH_EPSG=no" }};
     MyOGRHandler<decltype(factory)::projection_type> ogr_handler{dataset, factory};
 
-    std::cerr << "Pass 2...\n";
+    if (!quiet) {
+    	std::cerr << "Pass 2...\n";
+    }
     osmium::io::Reader reader{input_file};
 
     osmium::apply(reader, location_handler, ogr_handler, mp_manager.handler([&ogr_handler](const osmium::memory::Buffer& area_buffer) {
@@ -204,7 +216,9 @@ int main(int argc, char* argv[]) {
     }));
 
     reader.close();
-    std::cerr << "Pass 2 done\n";
+    if (!quiet) {
+    	std::cerr << "Pass 2 done\n";
+    }
 
     std::vector<osmium::object_id_type> incomplete_relations_ids;
     mp_manager.for_each_incomplete_relation([&](const osmium::relations::RelationHandle& handle){
@@ -219,8 +233,10 @@ int main(int argc, char* argv[]) {
     }
 
     osmium::MemoryUsage memory;
-    if (memory.peak()) {
-        std::cerr << "Memory used: " << memory.peak() << " MBytes\n";
+    if (!quiet) {
+    	if (memory.peak()) {
+            std::cerr << "Memory used: " << memory.peak() << " MBytes\n";
+        }
     }
 }
 
